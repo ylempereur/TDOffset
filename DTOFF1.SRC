@@ -1,0 +1,255 @@
+LINE    MACRO   #LNR
+        LD      HL,3C00H+40H*#LNR
+        LD      DE,3C01H+40H*#LNR
+        LD      BC,3FH
+        LD      (HL),'-'
+        LDIR
+        ENDM
+;------------------------------
+DEFDRI  EQU     212H
+OSYNC   EQU     287H
+PUNCH   EQU     264H
+BLINK   EQU     22CH
+CTOFF   EQU     1F8H
+RESET   EQU     0
+        ORG     7000H
+COUNT   DEFS    1
+BUFF    DEFS    2
+TAB3    DEFW    3F80H
+        DEFM    'ENTRY POINT : '
+TRA     DEFM    '    H'
+        DEFB    1
+TAB5    DEFW    3C1CH
+        DEFM    'TAPE SAVING MODULE.'
+        DEFB    0
+        DEFW    3C43H
+        DEFM    'NAME:'
+        DEFB    0
+        DEFW    3F20H
+        DEFM    'RECORDS = 0000'
+        DEFB    1
+TAB4    DEFW    3F42H
+        DEFM    'SAVING ERROR !'
+        DEFB    1
+TAB10   DEFW    3C0EH
+        DEFM    'DTOFFSET - DISK'
+        DEFB    5EH
+        DEFM    'TAPE OFFSET - VER 1.0'
+        DEFB    0
+        DEFW    3D9AH
+        DEFM    'COPY "'
+DNAME   DEFM    '      "'
+        DEFB    0
+        DEFW    3DD4H
+        DEFM    'HOW MANY TIMES (1 TO 7)?'
+        DEFB    0
+        DEFW    3E90H
+        DEFM    'WRITTEN BY Y. LEMPEREUR'
+        DEFB    0
+        DEFW    3ED0H
+        DEFM    'COPYRIGHT (C) 09/27/81 BY TRSOFT'
+        DEFB    1
+TAB2    DEFW    3C11H
+        DEFM    'DTOFFSET - '
+        DEFB    0
+        DEFW    3F02H
+        DEFM    'BYTES = 00000'
+        DEFB    1
+BREAK   LD      A,(3840H)
+        AND     1
+        JR      Z,BREAK
+        RET
+INKEY   LD      A,(3810H)
+        AND     0FEH
+        JR      Z,INKEY
+        LD      B,0FFH
+INK0    INC     B
+        RRA
+        JR      NC,INK0
+        LD      A,B
+        RET
+SAVE    LD      A,(IX)
+        INC     IX
+        CALL    PUNCH
+        CALL    BYTE
+        RET
+DISP    LD      (DE),A
+        INC     DE
+        LD      A,E
+        CP      0C0H
+        JR      NZ,DIS0
+        LD      A,D
+        CP      3EH
+        JR      NZ,DIS0
+        LD      DE,3CC0H
+DIS0    LD      A,5DH
+        LD      (DE),A
+        INC     DE
+        LD      A,'-'
+        LD      (DE),A
+        DEC     DE
+        RET
+BYTE    EXX
+        LD      HL,3F0EH
+        JR      ADDER
+REC     EXX
+        LD      HL,3F2DH
+ADDER   EX      AF,AF'
+AD1     INC     (HL)
+        LD      A,(HL)
+        CP      '9'+1
+        JR      Z,AD0
+        EXX
+        EX      AF,AF'
+        RET
+AD0     LD      (HL),'0'
+        DEC     HL
+        JR      AD1
+SQUARE  LINE    2
+        LINE    11
+        RET
+ERROR   LD      HL,TAB4
+        CALL    PRINT
+        CALL    BREAK
+        JP      RESET
+CLS     LD      HL,3C00H
+        LD      DE,3C01H
+        LD      BC,03FFH
+        LD      (HL),' '
+        LDIR
+        RET
+AFFW    LD      (BUFF),HL
+        LD      HL,BUFF+1
+        CALL    AFFB
+        DEC     HL
+AFFB    LD      B,2
+AF0     LD      A,'0'
+        RLD
+        CP      '9'+1
+        JR      C,AF1
+        ADD     A,7
+AF1     LD      (DE),A
+        INC     DE
+        DJNZ    AF0
+        RET
+INIT    CALL    PRINT
+        LD      HL,TAB2
+        CALL    PRINT
+        CALL    SQUARE
+        XOR     A
+        CALL    DEFDRI
+        JP      OSYNC
+PRINT   LD      E,(HL)
+        INC     HL
+        LD      D,(HL)
+        INC     HL
+LAB1    LD      A,(HL)
+        INC     HL
+        DEC     A
+        RET     Z
+        INC     A
+        JR      Z,PRINT
+        LD      (DE),A
+        INC     DE
+        JR      LAB1
+TABN    DEFW    3DD0H
+        DEFM    'LE PROGRAMME NE SE TROUVE PAS EN MEMOIRE,'
+        DEFB    0
+        DEFW    3E10H
+        DEFM    'OU EST IMPOSSIBLE A SAUVER.'
+        DEFB    1
+NOTLD   CALL    CLS
+        LD      HL,TABN
+        CALL    PRINT
+        CALL    BREAK
+        JP      RESET
+START   DI
+        LD      HL,(0BF99H)
+        PUSH    HL
+        POP     IX
+        LD      A,(IX)
+        CP      55H
+        JR      NZ,NOTLD
+        LD      A,(IX+7)
+        CP      3CH
+        JR      NZ,NOTLD
+        INC     HL
+        LD      DE,DNAME
+        LD      BC,6
+        LDIR
+DUMP    CALL    CLS
+        LD      HL,TAB10
+        CALL    PRINT
+DUM2    LD      A,(3810H)
+        AND     0FEH
+        JR      NZ,DUM2
+        LD      B,0
+        DJNZ    $
+        CALL    INKEY
+        LD      (COUNT),A
+DUM6    CALL    CLS
+        PUSH    IX
+        CALL    SYSTEM
+        POP     IX
+        LD      A,(COUNT)
+        DEC     A
+        JP      Z,RESET
+        LD      (COUNT),A
+        LD      D,4
+DUM5    LD      BC,0
+        CALL    60H
+        DEC     D
+        JR      NZ,DUM5
+        JR      DUM6
+SYSTEM  LD      HL,TAB5
+        CALL    INIT
+        LD      HL,2A2AH
+        LD      (3C3EH),HL
+        CALL    SAVE
+        CP      55H
+        JP      NZ,ERROR
+        LD      B,6
+        LD      DE,3C49H
+STR1    CALL    SAVE
+        LD      (DE),A
+        INC     DE
+        DJNZ    STR1
+        LD      DE,3CC0H
+STR2    CALL    SAVE
+        CP      78H
+        JR      Z,TERM
+        CP      3CH
+        JP      NZ,ERROR
+        CALL    SAVE
+        LD      B,A
+        CALL    BLINK
+        CALL    SAVE
+        LD      C,A
+        CALL    SAVE
+        ADD     A,C
+        LD      C,A
+STR3    CALL    SAVE
+        DEC     IX
+        LD      A,(IX)
+        CALL    DISP
+        LD      A,(IX)
+        ADD     A,C
+        LD      C,A
+        INC     IX
+        DJNZ    STR3
+        CALL    REC
+        CALL    SAVE
+        CP      C
+        JR      Z,STR2
+        JP      ERROR
+TERM    CALL    SAVE
+        LD      E,A
+        CALL    SAVE
+        LD      D,A
+        LD      HL,TRA
+        EX      DE,HL
+        CALL    AFFW
+        LD      HL,TAB3
+        CALL    PRINT
+        RET
+        END     START

@@ -1,0 +1,412 @@
+;       TAPE-->DISK OFFSET - VER 2.1
+;       ============================
+LOAD    MACRO
+        CALL    READ
+        LD      (HL),A
+        INC     HL
+        CALL    BYTE
+        ENDM
+LINE    MACRO   #LNR
+        LD      HL,3C00H+40H*#LNR
+        LD      DE,3C01H+40H*#LNR
+        LD      BC,3FH
+        LD      (HL),'-'
+        LDIR
+        ENDM
+;---------------------------------
+INKEY   EQU     49H
+DEFDRI  EQU     212H
+SYNC    EQU     296H
+READ    EQU     235H
+BLINK   EQU     22CH
+CTOFF   EQU     1F8H
+DOS     EQU     4405H
+RESET   EQU     6CCH
+ENTER   EQU     0DH
+        ORG     7000H
+DISP    LD      (DE),A
+        INC     DE
+        LD      A,E
+        CP      0C0H
+        JR      NZ,DSP0
+        LD      A,D
+        CP      3EH
+        JR      NZ,DSP0
+        LD      DE,3CC0H
+DSP0    LD      A,(3840H)
+        AND     4
+        RET     Z
+        POP     HL
+        JR      START
+BYTE    EXX
+        LD      HL,3F0EH
+        JR      ADDER
+REC     EXX
+        LD      HL,3F2DH
+ADDER   EX      AF,AF'
+AD1     LD      A,(HL)
+        INC     A
+        CP      '9'+1
+        JR      Z,AD0
+        LD      (HL),A
+        EXX
+        EX      AF,AF'
+        RET
+AD0     LD      (HL),'0'
+        DEC     HL
+        JR      AD1
+ERROR   LD      HL,TAB4
+        JR      ER1
+SHORT   LD      HL,TAB5
+ER1     CALL    PRINT
+ER0     CALL    INKEY
+        CP      ENTER
+        JR      NZ,ER0
+        JR      START
+TAB4    DEFW    3F42H
+        DEFM    'LOADING ERROR !!!'
+        DEFB    1
+TAB5    DEFW    3F42H
+        DEFM    'MEMORY TOO SMALL !!!'
+        DEFB    1
+START   DI
+        LD      SP,41F8H
+        CALL    CLS
+        LD      HL,TAB1
+        CALL    PRINT
+STR0    CALL    INKEY
+        CP      ENTER
+        JR      NZ,STR0
+        CALL    CLS
+        LD      HL,TAB2
+        CALL    PRINT
+        LINE    2
+        LINE    11
+        XOR     A
+        CALL    DEFDRI
+        DI
+        LD      HL,BUFFER
+        CALL    SYNC
+        LOAD
+        CP      55H
+        JP      NZ,ERROR
+        LD      B,6
+        LD      DE,3C49H
+STR1    LOAD
+        LD      (DE),A
+        INC     DE
+        DJNZ    STR1
+        LD      DE,3CC0H
+STR2    LOAD
+        CP      78H
+        JR      Z,TERM
+        CP      3CH
+        JP      NZ,ERROR
+        LOAD
+        LD      B,A
+        CALL    BLINK
+        LOAD
+        LD      C,A
+        LOAD
+        ADD     A,C
+        LD      C,A
+STR3    CALL    READ
+        LD      (HL),A
+        CALL    BYTE
+        LD      A,(HL)
+        CALL    DISP
+        LD      A,(HL)
+        ADD     A,C
+        LD      C,A
+        INC     HL
+        DJNZ    STR3
+        CALL    REC
+        LOAD
+        CP      C
+        JR      Z,STR2
+        JP      ERROR
+TERM    LOAD
+        LOAD
+        PUSH    HL
+        CALL    CTOFF
+        POP     DE
+        LD      HL,TABI-1
+        XOR     A
+        SBC     HL,DE
+        JP      M,SHORT
+        LD      HL,BUFFER
+        EX      DE,HL
+        PUSH    HL
+        XOR     A
+        SBC     HL,DE
+        LD      B,H
+        LD      C,L
+        LD      HL,TABI
+        XOR     A
+        SBC     HL,BC
+        LD      (LBUF+2),HL
+        POP     HL
+        DEC     HL
+        LD      DE,TABI-1
+        LDDR
+        LD      HL,BEGIN
+        LD      DE,TABI
+        LD      BC,BUFFER-BEGIN
+        LDIR
+        LD      DE,TSTA
+        LD      HL,(LBUF+2)
+        CALL    AFFW
+        LD      DE,TEND
+        LD      HL,TABI+(BUFFER-BEGIN)
+        CALL    AFFW
+        LD      DE,TRA
+        LD      HL,ENTRY
+        CALL    AFFW
+        LD      HL,BUFFER+1
+        LD      DE,DNAME
+        LD      BC,6
+        LDIR
+        LD      HL,DNAME-1
+        LD      DE,ENDCOM
+        LD      B,6
+KLWE    INC     HL
+        LD      A,(HL)
+        CP      ' '
+        JR      Z,KLTE
+        DJNZ    KLWE
+        JR      KLRE
+KLTE    LD      A,(DE)
+        LD      (HL),A
+        INC     DE
+        INC     HL
+        CP      ENTER
+        JR      NZ,KLTE
+KLRE    LD      HL,DNAME
+        LD      DE,FIL0
+KOPQ    LD      A,(HL)
+        CP      ','
+        JR      Z,KJHG
+        LD      (DE),A
+        INC     DE
+        INC     HL
+        JR      KOPQ
+KJHG    LD      A,1
+        LD      (DE),A
+        LD      HL,FILE
+        CALL    PRINT
+        LD      HL,3FC0H
+        LD      (4020H),HL
+        LD      HL,DOSCOM
+        CALL    DOS
+        JP      RESET
+CLS     LD      HL,3C00H
+        LD      DE,3C01H
+        LD      BC,3FFH
+        LD      (HL),' '
+        LDIR
+        RET
+PRINT   LD      E,(HL)
+        INC     HL
+        LD      D,(HL)
+        INC     HL
+LAB1    LD      A,(HL)
+        INC     HL
+        CP      1
+        RET     Z
+        AND     A
+        JR      Z,PRINT
+        LD      (DE),A
+        INC     DE
+        JR      LAB1
+AFFW    LD      A,H
+        CALL    AFFB
+        LD      A,L
+AFFB    LD      B,A
+        RRA
+        RRA
+        RRA
+        RRA
+        CALL    XAFF
+        LD      A,B
+XAFF    AND     0FH
+        OR      30H
+        CP      '9'+1
+        JR      C,XA0
+        ADD     A,7
+XA0     LD      (DE),A
+        INC     DE
+        RET
+TAB1    DEFW    3C0DH
+        DEFM    'TDOFFSET - TAPE'
+        DEFB    5EH
+        DEFM    'DISK OFFSET - VER 2.1'
+        DEFB    0
+        DEFW    3C81H
+        DEFM    'CE PROGRAMME PERMET DE CHARGER EN MEMOIRE UN PROGRAMME EN'
+        DEFB    0
+        DEFW    3CC0H
+        DEFM    'LANGAGE MACHINE SUR CASSETTE 500 BAUD 16K ET DE L'
+        DEFB    27H
+        DEFM    'ENREGISTRER'
+        DEFB    0
+        DEFW    3D00H
+        DEFM    'SUR DISK SOUS FORME DE MODULE.'
+        DEFB    0
+        DEFW    3D81H
+        DEFM    'LE MODULE AINSI CREE POURRA ETRE LANCE NORMALEMENT SANS'
+        DEFB    0
+        DEFW    3DC0H
+        DEFM    'INTERFERER SUR LE SOFTWARE DOS MEME SI L'
+        DEFB    27H
+        DEFM    'UN ECRASE L'
+        DEFB    27H
+        DEFM    'AUTRE.'
+        DEFB    0
+        DEFW    3E90H
+        DEFM    'WRITTEN BY Y. LEMPEREUR'
+        DEFB    0
+        DEFW    3ED0H
+        DEFM    'COPYRIGHT (C) 09/27/81 BY TRSOFT'
+        DEFB    0
+        DEFW    3F10H
+        DEFM    'FOR -NEWDOS80- ONLY.'
+        DEFB    0
+        DEFW    3FC0H
+        DEFM    'PRESS <ENTER> TO LOAD SYSTEM TAPE.'
+        DEFB    1
+TAB2    DEFW    3C10H
+        DEFM    'TDOFFSET - TAPE LOADING MODULE.'
+        DEFB    0
+        DEFW    3C43H
+        DEFM    'NAME:'
+        DEFB    0
+        DEFW    3F02H
+        DEFM    'BYTES = 00000'
+        DEFB    0
+        DEFW    3F20H
+        DEFM    'RECORDS = 0000'
+        DEFB    1
+DOSCOM  DEFM    'DUMP,'
+DNAME   DEFM    'NAMENA'
+ENDCOM  DEFM    '/CMD:0,'
+TSTA    DEFM    '    H,'
+TEND    DEFM    '    H,'
+TRA     DEFM    '    H'
+        DEFB    0DH
+FILE    DEFW    3F80H
+        DEFM    'FILESPEC: '
+FIL0    DEFM    'NAMENA/CMD:0'
+        DEFB    1
+TABI    EQU     0BEF0H
+BEGIN   DEFB    1CH
+        DEFB    1FH
+        DEFB    192+0DH
+        DEFM    'TDOFFSET - RELOCATING MODULE - VER 2.1'
+        DEFB    0DH
+INP     EQU     $-BEGIN+TABI
+        LD      A,(IX)
+        INC     IX
+        RET
+ERR     EQU     $-BEGIN+TABI
+        LD      HL,TABE
+        LD      DE,3C3BH
+        LD      BC,5
+        LDIR
+        JR      $
+TABE    EQU     $-BEGIN+TABI
+        DEFM    'ERROR'
+PRINT0  EQU     $-BEGIN+TABI
+PRT     LD      A,(HL)
+        CALL    33H
+        INC     HL
+        CP      ENTER
+        JR      NZ,PRT
+        RET
+ENTRY   EQU     $-BEGIN+TABI
+        DI
+        XOR     A
+        OUT     (0FFH),A
+        LD      HL,6D2H
+        LD      DE,4000H
+        LD      BC,36H
+        LDIR
+        LD      B,27H
+EN0     LD      (DE),A
+        INC     DE
+        DJNZ    EN0
+        LD      DE,4080H
+        LD      HL,18F7H
+        LD      BC,27H
+        LDIR
+        LD      HL,41E5H
+        LD      (HL),3AH
+        INC     HL
+        LD      (HL),B
+        INC     HL
+        LD      (HL),2CH
+        INC     HL
+        LD      (40A7H),HL
+        LD      DE,12DH
+        LD      B,1CH
+        LD      HL,4152H
+EN1     LD      (HL),0C3H
+        INC     HL
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D
+        INC     HL
+        DJNZ    EN1
+        LD      B,15H
+EN2     LD      (HL),0C9H
+        INC     HL
+        INC     HL
+        INC     HL
+        DJNZ    EN2
+        LD      HL,42E8H
+        LD      (HL),B
+        LD      SP,41F8H
+        CALL    1B8FH
+        LD      SP,4284H
+        LD      HL,TABI
+        CALL    PRINT0
+LBUF    LD      IX,BUFFER
+        CALL    INP
+        CP      55H
+        JP      NZ,ERR
+        LD      B,6
+LAB2    CALL    INP
+        DJNZ    LAB2
+LAB3    CALL    INP
+        CP      3CH
+        JR      NZ,LAB4
+        CALL    INP
+        LD      B,A
+        CALL    INP
+        LD      L,A
+        LD      C,A
+        CALL    INP
+        LD      H,A
+        ADD     A,C
+        LD      C,A
+LAB5    CALL    INP
+        LD      (HL),A
+        INC     HL
+        ADD     A,C
+        LD      C,A
+        DJNZ    LAB5
+        CALL    INP
+        CP      C
+        JR      Z,LAB3
+        JP      ERR
+LAB4    CP      78H
+        JP      NZ,ERR
+        CALL    INP
+        LD      L,A
+        CALL    INP
+        LD      H,A
+        PUSH    HL
+        POP     HL
+        CALL    41E2H
+        JP      (HL)
+BUFFER  DEFB    0
+        END     START
